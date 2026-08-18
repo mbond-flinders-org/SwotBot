@@ -1,8 +1,10 @@
 node_modules/
 .next/
+.cache/
 cache/
 static/
 server/
+types/
 .env
 .env.local
 .env.*.local
@@ -12,3 +14,6 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 trace
+app-build-manifest.json
+build-manifest.json
+react-loadable-manifest.json
