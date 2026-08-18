@@ -1,0 +1,14 @@
+node_modules/
+.next/
+cache/
+static/
+server/
+.env
+.env.local
+.env.*.local
+
+npm-debug.log*
+
+*.tsbuildinfo
+next-env.d.ts
+trace
