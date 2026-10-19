@@ -21,6 +21,31 @@ so the suite always runs against the same model the app does. If a model gets re
 Expect some failures. That is the point: a case that passes 6 times out of 10 is telling you
 something a single test run would have hidden.
 
+## Why every case runs twice
+
+Each case runs against two providers: the grader at `temperature: 0.7`, which is what the app
+ships, and the same grader at `temperature: 0`. The table comes out as a side-by-side.
+
+Turning the temperature down is the first thing anyone suggests when they see the spread, so the
+suite answers it directly. The consistency case tightens up — and nothing else moves. Case 3 still
+falls for the injection, case 4 still rewards waffle. A grader that is reliably wrong is still
+wrong, and reliability is not the same thing as being right.
+
+Two things worth knowing before you reach for it as a fix:
+
+- **Temperature 0 is not actually deterministic.** Greedy decoding still drifts in production,
+  because of request batching, floating-point ordering on GPUs, and expert routing in
+  mixture-of-experts models. Expect a narrower spread, not none.
+- **The quiz generator wants the variety.** Drop the temperature there and every student gets the
+  same five questions from the same notes forever — which is a problem this app has already had
+  once.
+
+A heavy run doubles its API calls, so filter to one provider:
+
+```bash
+npx promptfoo@latest eval --env-file ../.env --repeat 10 --filter-providers "temp 0.7"
+```
+
 ## The cases
 
 | # | Case | What it protects |

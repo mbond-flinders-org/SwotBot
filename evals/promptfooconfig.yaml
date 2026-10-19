@@ -15,15 +15,34 @@ description: SwotBot grader — does it mark honestly, and does it mark consiste
 prompts:
   - file://grader-prompt.json
 
+# Two providers: the same grader at the temperature the app ships with, and the
+# same grader with the dice turned off. Every case runs against both, so the
+# results table is a side-by-side.
+#
+# Turning temperature down narrows the spread on the consistency case. It does
+# nothing for the others — a grader that is reliably wrong is still wrong. That
+# contrast is the point of running both.
+#
+# For a heavy run, pick one:
+#   npx promptfoo@latest eval --repeat 10 --filter-providers "temp 0.7"
+#
+# Model comes from GROQ_MODEL in ../.env (see .env.example). The fallback is
+# only used if that variable is missing.
 providers:
-  # Model comes from GROQ_MODEL in ../.env (see .env.example). The fallback is only
-  # used if that variable is missing.
   - id: openai:chat:{{ env.GROQ_MODEL | default("openai/gpt-oss-120b") }}
-    label: swotbot-grader
+    label: grader temp 0.7
     config:
       apiBaseUrl: https://api.groq.com/openai/v1
       apiKeyEnvar: GROQ_API_KEY
       temperature: 0.7      # same dice the app ships with
+      max_tokens: 1024
+
+  - id: openai:chat:{{ env.GROQ_MODEL | default("openai/gpt-oss-120b") }}
+    label: grader temp 0
+    config:
+      apiBaseUrl: https://api.groq.com/openai/v1
+      apiKeyEnvar: GROQ_API_KEY
+      temperature: 0        # dice off — as deterministic as this gets
       max_tokens: 1024
 
 defaultTest:
