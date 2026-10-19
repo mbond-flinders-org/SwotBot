@@ -65,11 +65,13 @@ for (const r of rows) {
   const col = pick(r?.prompt?.label, r?.promptLabel, r?.provider?.label) || "result"
   if (!colIdx.has(col)) colIdx.set(col, r?.promptIdx ?? colIdx.size)
   if (!cases.has(desc)) cases.set(desc, {})
-  cases.get(desc)[col] = {
-    pass: r?.success ?? r?.gradingResult?.pass,
-    score: scoreOf(r),
-    why: shortReason(r),
-  }
+  const bucket = (cases.get(desc)[col] ??= { runs: 0, passes: 0, scores: [], why: [] })
+  const pass = r?.success ?? r?.gradingResult?.pass
+  bucket.runs += 1
+  if (pass === true) bucket.passes += 1
+  const s = scoreOf(r)
+  if (s !== "") bucket.scores.push(Number(s))
+  if (pass === false) bucket.why.push(shortReason(r))
 }
 
 const columns = [...colIdx.keys()].sort((a, b) => colIdx.get(a) - colIdx.get(b))
@@ -115,32 +117,45 @@ for (const [desc, byCol] of cases) {
   const cells = columns.map((c) => {
     const cell = byCol[c]
     if (!cell) return pad("--", COL_W)
-    if (cell.pass === false) failed[c] += 1
-    // A reply the app can't read is a different failure from a mark that's
-    // wrong. Showing "FAIL 0/10" for the first one reads as a contradiction:
-    // the mark was fine, the reply was not.
-    if (cell.why === "UNPARSEABLE") return pad("UNREADABLE", COL_W)
-    const verdict = cell.pass === true ? "PASS" : cell.pass === false ? "FAIL" : "?"
-    return pad(cell.score ? `${verdict} ${cell.score.padStart(2)}/10` : verdict, COL_W)
+    if (cell.passes < cell.runs) failed[c] += 1
+    const { runs, passes, scores } = cell
+    const lo = scores.length ? Math.min(...scores) : null
+    const hi = scores.length ? Math.max(...scores) : null
+    const marks = lo === null ? "" : lo === hi ? `${lo}/10` : `${lo}-${hi}/10`
+
+    // One run: say what happened. Several: say how often. A single verdict on a
+    // model that rolls dice is a sample, not a measurement.
+    if (runs === 1) {
+      // A reply the app can't read is a different failure from a mark that's
+      // wrong. "FAIL 0/10" for the first one reads as a contradiction.
+      if (cell.why[0] === "UNPARSEABLE") return pad("UNREADABLE", COL_W)
+      const verdict = passes ? "PASS" : "FAIL"
+      return pad(marks ? `${verdict} ${marks.padStart(5)}` : verdict, COL_W)
+    }
+    return pad(`${passes}/${runs} pass${marks ? "  " + marks : ""}`, COL_W)
   })
   const lines = wrap(desc, WRAP)
   console.log(`  ${String(n).padStart(2)}  ${pad(lines[0], WRAP + 2)}${cells.join("").trimEnd()}`)
   for (const extra of lines.slice(1)) console.log(" ".repeat(6) + extra)
   for (const c of columns) {
     const cell = byCol[c]
-    if (cell?.pass === false && cell.why) {
-      const note =
-        cell.why === "UNPARSEABLE"
-          ? `the app could not read the reply` +
-            (cell.score ? ` (the mark inside it was ${cell.score}/10)` : "")
-          : cell.why
-      console.log(" ".repeat(6) + `\u21b3 ${splitLabel(c)[0]}: ${note}`)
-    }
+    if (!cell?.why?.length) continue
+    // Group the reasons, so ten runs don't print ten near-identical lines.
+    const tally = new Map()
+    for (const w of cell.why) tally.set(w, (tally.get(w) ?? 0) + 1)
+    const parts = [...tally.entries()].map(([w, k]) => {
+      const text = w === "UNPARSEABLE" ? "the app could not read the reply" : w
+      return cell.runs > 1 ? `${k}\u00d7 ${text}` : text
+    })
+    console.log(" ".repeat(6) + `\u21b3 ${splitLabel(c)[0]}: ${parts.join(", ")}`)
   }
 }
 
 console.log()
 for (const c of columns) {
-  console.log(`  ${pad(c, GUTTER - 2)}${failed[c]} of ${n} failed`)
+  const runs = [...cases.values()].reduce((a, b) => a + (b[c]?.runs ?? 0), 0)
+  const passes = [...cases.values()].reduce((a, b) => a + (b[c]?.passes ?? 0), 0)
+  const label = runs > n ? `${runs - passes} of ${runs} runs failed` : `${failed[c]} of ${n} failed`
+  console.log(`  ${pad(c, GUTTER - 2)}${label}`)
 }
 console.log()
