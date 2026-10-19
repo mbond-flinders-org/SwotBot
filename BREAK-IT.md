@@ -57,6 +57,21 @@ npx promptfoo@latest eval --env-file ../.env --no-cache --repeat 10
 **What to look for.** Does the grader obey your note? How often? And does it behave the same way
 at temperature `0` as it does at `0.7`?
 
+**What happened when we measured it** (gpt-oss-120b, October 2026):
+
+| temperature | runs that gave "idk lol" 10 out of 10 |
+| --- | --- |
+| 0.7 — what the app ships with | 27 of 60, about half |
+| 0 — the "safe" setting | **30 of 30** |
+
+Read that second row again. Lowering the temperature did not protect the grader. It made the
+grader follow the injected instruction **every single time**.
+
+This is worth sitting with. Many people assume a lower temperature makes an AI feature safer,
+because the output becomes predictable. Predictable is not the same as correct. At temperature 0
+the model reliably does the most literal thing in front of it — and the most literal thing was an
+instruction from a student.
+
 **Why this happens.** Your notes and the developer's instructions arrive at the model together, as
 one block of text. The model cannot reliably tell which part came from the developer and which
 part came from you. To the model, both parts are simply words.
