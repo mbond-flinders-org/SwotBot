@@ -76,6 +76,28 @@ for (const r of rows) {
 
 const columns = [...colIdx.keys()].sort((a, b) => colIdx.get(a) - colIdx.get(b))
 
+// Render a cell first, measure second: with --repeat the text is wider than
+// any column heading, and a column sized only to its heading runs into its
+// neighbour.
+const cellText = (cell) => {
+  if (!cell) return "--"
+  const { runs, passes, scores } = cell
+  const lo = scores.length ? Math.min(...scores) : null
+  const hi = scores.length ? Math.max(...scores) : null
+  const marks = lo === null ? "" : lo === hi ? `${lo}/10` : `${lo}-${hi}/10`
+
+  // One run: say what happened. Several: say how often. A single verdict on a
+  // model that rolls dice is a sample, not a measurement.
+  if (runs === 1) {
+    // A reply the app can't read is a different failure from a mark that's
+    // wrong. "FAIL 0/10" for the first one reads as a contradiction.
+    if (cell.why[0] === "UNPARSEABLE") return "UNREADABLE"
+    const verdict = passes ? "PASS" : "FAIL"
+    return marks ? `${verdict} ${marks.padStart(5)}` : verdict
+  }
+  return `${passes}/${runs} pass${marks ? "  " + marks.padStart(8) : ""}`
+}
+
 // "hardened (shipping)" -> two header lines, rather than one cut off mid-word.
 const splitLabel = (s) => {
   const i = s.indexOf(" (")
@@ -98,7 +120,13 @@ const wrap = (s, n) => {
   return out
 }
 
-const COL_W = Math.max(13, ...columns.flatMap((c) => splitLabel(c).map((p) => p.length + 3)))
+const COL_W = Math.max(
+  13,
+  ...columns.flatMap((c) => splitLabel(c).map((p) => p.length + 3)),
+  ...[...cases.values()].flatMap((byCol) =>
+    columns.map((c) => cellText(byCol[c]).length + 3)
+  )
+)
 const pad = (s, n) => s.padEnd(n)
 const GUTTER = WRAP + 6
 
@@ -107,7 +135,7 @@ for (const line of [0, 1]) {
   const heads = columns.map((c) => pad(splitLabel(c)[line], COL_W)).join("")
   if (heads.trim()) console.log(" ".repeat(GUTTER) + heads.trimEnd())
 }
-console.log("  " + "─".repeat(GUTTER + COL_W * columns.length - 4))
+console.log("  " + "\u2500".repeat(GUTTER + COL_W * columns.length - 4))
 
 let n = 0
 const failed = Object.fromEntries(columns.map((c) => [c, 0]))
@@ -116,23 +144,8 @@ for (const [desc, byCol] of cases) {
   n += 1
   const cells = columns.map((c) => {
     const cell = byCol[c]
-    if (!cell) return pad("--", COL_W)
-    if (cell.passes < cell.runs) failed[c] += 1
-    const { runs, passes, scores } = cell
-    const lo = scores.length ? Math.min(...scores) : null
-    const hi = scores.length ? Math.max(...scores) : null
-    const marks = lo === null ? "" : lo === hi ? `${lo}/10` : `${lo}-${hi}/10`
-
-    // One run: say what happened. Several: say how often. A single verdict on a
-    // model that rolls dice is a sample, not a measurement.
-    if (runs === 1) {
-      // A reply the app can't read is a different failure from a mark that's
-      // wrong. "FAIL 0/10" for the first one reads as a contradiction.
-      if (cell.why[0] === "UNPARSEABLE") return pad("UNREADABLE", COL_W)
-      const verdict = passes ? "PASS" : "FAIL"
-      return pad(marks ? `${verdict} ${marks.padStart(5)}` : verdict, COL_W)
-    }
-    return pad(`${passes}/${runs} pass${marks ? "  " + marks : ""}`, COL_W)
+    if (cell && cell.passes < cell.runs) failed[c] += 1
+    return pad(cellText(cell), COL_W)
   })
   const lines = wrap(desc, WRAP)
   console.log(`  ${String(n).padStart(2)}  ${pad(lines[0], WRAP + 2)}${cells.join("").trimEnd()}`)
