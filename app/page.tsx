@@ -17,6 +17,19 @@ interface QuestionResult {
 
 type AppState = "input" | "quiz" | "results"
 
+// Which build of SwotBot you are looking at.
+//
+// The grading prompt changed between video 1 and video 2, so the same URL can
+// behave differently depending on what is deployed. This footer says which one
+// you have got.
+//
+// NEXT_PUBLIC_APP_VERSION is set by you (in .env locally, or in the Vercel
+// project settings). NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA is set by Vercel on every
+// deploy, so the commit stays honest even when you forget to update the label.
+const REPO_URL = "https://github.com/mbond-flinders-org/SwotBot"
+const BUILD_LABEL = process.env.NEXT_PUBLIC_APP_VERSION || "local dev build"
+const BUILD_SHA = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || ""
+
 export default function SwotBot() {
   const [state, setState] = useState<AppState>("input")
   const [notes, setNotes] = useState("")
@@ -358,7 +371,23 @@ export default function SwotBot() {
       </main>
 
       <footer className="mt-10 text-center text-gray-400 text-sm">
-        Built with 🦉 by SwotBot
+        <div>Built with 🦉 by SwotBot</div>
+        <div className="text-xs mt-1">
+          {BUILD_LABEL}
+          {BUILD_SHA && (
+            <>
+              {" \u00b7 "}
+              <a
+                href={`${REPO_URL}/commit/${BUILD_SHA}`}
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-gray-600"
+              >
+                {BUILD_SHA.slice(0, 7)}
+              </a>
+            </>
+          )}
+        </div>
       </footer>
     </div>
   )
