@@ -344,7 +344,13 @@ async function runGrade(key, args, notes) {
   console.log(`  lowest ${s.min}   highest ${s.max}   spread ${s.spread} marks`)
   console.log(`  mean ${s.mean.toFixed(1)}   standard deviation ${s.sd.toFixed(2)}`)
   reportFailures(failures)
-  console.log(`\n${DIM}Same answer. Same marker. ${s.spread === 0 ? "No spread this time — try a more borderline answer." : `${s.spread} marks between best and worst.`}${OFF}\n`)
+  // Zero spread is a result, not a dud run. Saying "try a harder answer" here
+  // misses the point: a grader that returns the same thing every time is
+  // reproducible, and reproducible is not the same as correct.
+  const verdict = s.spread === 0
+    ? `Every run identical. That is reproducible — which is not the same as right.`
+    : `${s.spread} marks between best and worst.`
+  console.log(`\n${DIM}Same answer. Same marker. ${verdict}${OFF}\n`)
 }
 
 // ---------------------------------------------------------------------------
