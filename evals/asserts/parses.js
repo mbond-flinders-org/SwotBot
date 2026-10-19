@@ -2,7 +2,9 @@ const { parseGrade } = require("./_parse.js")
 
 module.exports = (output) => {
   let g
-  try { g = parseGrade(output) } catch (e) { return { pass: false, score: 0, reason: `reply was not usable JSON: ${e.message}` } }
+  try { g = parseGrade(output) } catch (e) {
+    return { pass: false, score: 0, reason: `reply was not usable JSON (${e.message}): ${String(output).slice(0, 80)}` }
+  }
   if (typeof g.score !== "number" || g.score < 0 || g.score > 10) {
     return { pass: false, score: 0, reason: `score was ${JSON.stringify(g.score)}, expected a number 0-10` }
   }
