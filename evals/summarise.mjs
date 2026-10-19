@@ -50,7 +50,7 @@ const shortReason = (r) => {
   if (r?.success !== false) return ""
   const reason = pick(r?.gradingResult?.reason, r?.failureReason, "") || ""
   if (/unusable reply|is not valid JSON|Unexpected token/i.test(reason))
-    return "reply would not parse"
+    return "UNPARSEABLE"
   const first = reason.split("\n")[0].replace(/\s+/g, " ").trim()
   return first.length > 58 ? first.slice(0, 57) + "\u2026" : first || "assertion failed"
 }
@@ -116,6 +116,10 @@ for (const [desc, byCol] of cases) {
     const cell = byCol[c]
     if (!cell) return pad("--", COL_W)
     if (cell.pass === false) failed[c] += 1
+    // A reply the app can't read is a different failure from a mark that's
+    // wrong. Showing "FAIL 0/10" for the first one reads as a contradiction:
+    // the mark was fine, the reply was not.
+    if (cell.why === "UNPARSEABLE") return pad("UNREADABLE", COL_W)
     const verdict = cell.pass === true ? "PASS" : cell.pass === false ? "FAIL" : "?"
     return pad(cell.score ? `${verdict} ${cell.score.padStart(2)}/10` : verdict, COL_W)
   })
@@ -124,8 +128,14 @@ for (const [desc, byCol] of cases) {
   for (const extra of lines.slice(1)) console.log(" ".repeat(6) + extra)
   for (const c of columns) {
     const cell = byCol[c]
-    if (cell?.pass === false && cell.why)
-      console.log(" ".repeat(6) + `\u21b3 ${splitLabel(c)[0]}: ${cell.why}`)
+    if (cell?.pass === false && cell.why) {
+      const note =
+        cell.why === "UNPARSEABLE"
+          ? `the app could not read the reply` +
+            (cell.score ? ` (the mark inside it was ${cell.score}/10)` : "")
+          : cell.why
+      console.log(" ".repeat(6) + `\u21b3 ${splitLabel(c)[0]}: ${note}`)
+    }
   }
 }
 
