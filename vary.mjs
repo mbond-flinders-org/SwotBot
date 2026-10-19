@@ -86,7 +86,9 @@ function requireKey() {
 // ---------------------------------------------------------------------------
 // the one API call, same shape as the app's
 // ---------------------------------------------------------------------------
-async function groqChat(key, systemPrompt, userMessage, temperature) {
+const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+
+async function groqChat(key, systemPrompt, userMessage, temperature, attempt = 0) {
   const res = await fetch(GROQ_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
@@ -100,9 +102,20 @@ async function groqChat(key, systemPrompt, userMessage, temperature) {
       max_tokens: 1024,
     }),
   })
-  if (!res.ok) throw new Error(`Groq ${res.status}: ${(await res.text()).slice(0, 200)}`)
+
+  // Free tiers throttle. Back off and try again rather than losing the run.
+  if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+    const retryAfter = Number(res.headers.get("retry-after"))
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2000 * 2 ** attempt
+    await sleep(waitMs)
+    return groqChat(key, systemPrompt, userMessage, temperature, attempt + 1)
+  }
+
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${(await res.text()).slice(0, 160).replace(/\s+/g, " ")}`)
   const data = await res.json()
-  return data.choices[0].message.content.trim()
+  const content = data.choices?.[0]?.message?.content
+  if (typeof content !== "string") throw new Error("no message content in the reply")
+  return content.trim()
 }
 
 // The app is forgiving about how the model wraps its JSON. So are we.
@@ -132,6 +145,8 @@ export function tokens(q) {
 }
 
 export function similarity(a, b) {
+  // Nothing meaningful to compare (very short questions) — fall back to exact match.
+  if (!a.size && !b.size) return 1
   if (!a.size || !b.size) return 0
   let shared = 0
   for (const w of a) if (b.has(w)) shared++
@@ -175,10 +190,10 @@ async function pool(count, limit, worker) {
       const i = next++
       try { results[i] = { ok: true, value: await worker(i) } }
       catch (err) { results[i] = { ok: false, error: err.message } }
-      process.stderr.write(".")
+      process.stdout.write(".")
     }
   }))
-  process.stderr.write("\n")
+  process.stdout.write("\n")
   return results
 }
 
@@ -186,6 +201,18 @@ async function pool(count, limit, worker) {
 // output
 // ---------------------------------------------------------------------------
 const BOLD = "\x1b[1m", DIM = "\x1b[2m", OFF = "\x1b[0m"
+
+// A run that failed is data too — a half-empty sample quietly skews everything below it.
+function reportFailures(failures) {
+  if (!failures.length) return
+  const counts = new Map()
+  for (const f of failures) counts.set(f, (counts.get(f) ?? 0) + 1)
+  console.log(`\n${BOLD}${failures.length} run(s) failed${OFF}`)
+  for (const [msg, n] of [...counts].sort((a, b) => b[1] - a[1])) {
+    console.log(`  ${String(n).padStart(2)} x  ${msg}`)
+  }
+  console.log(`${DIM}Rate limits are the usual cause — try --concurrency 1, or fewer runs.${OFF}`)
+}
 const bar = (n, total, width = 20) => "█".repeat(Math.round((n / total) * width)).padEnd(width, "·")
 
 function header(args, extra) {
@@ -204,8 +231,8 @@ async function runGenerate(key, args, notes) {
   })
 
   const ok = results.filter(r => r.ok).map(r => r.value)
-  const failed = results.length - ok.length
-  if (!ok.length) { console.error("Every run failed. Last error:", results[results.length - 1]?.error); process.exit(1) }
+  const failures = results.filter(r => !r.ok).map(r => r.error)
+  if (!ok.length) { console.error("\nEvery run failed:"); reportFailures(failures); process.exit(1) }
 
   if (args.show) {
     ok.forEach((qs, i) => {
@@ -234,8 +261,12 @@ async function runGenerate(key, args, notes) {
   console.log(`  ${groups.length} distinct questions  —  repeat rate ${repeatRate.toFixed(0)}%`)
   console.log(`  ${everyRun} turned up in every single run`)
   console.log(`  ${onceOnly} turned up exactly once`)
-  if (failed) console.log(`  ${DIM}${failed} run(s) failed${OFF}`)
-  console.log(`\n${DIM}Low distinct count + high repeat rate = the notes are barely being read.${OFF}\n`)
+  reportFailures(failures)
+  // Say what the numbers mean, rather than assuming which way they fell.
+  const verdict = repeatRate >= 60
+    ? "High repeat rate: the same few questions keep coming back, so the notes are barely being read."
+    : "Low repeat rate: the same notes produce a different quiz every time. Nobody is revising the same thing twice."
+  console.log(`\n${DIM}${verdict}${OFF}\n`)
 }
 
 async function runGrade(key, args, notes) {
@@ -248,7 +279,8 @@ async function runGrade(key, args, notes) {
   })
 
   const ok = results.filter(r => r.ok).map(r => r.value)
-  if (!ok.length) { console.error("Every run failed. Last error:", results[results.length - 1]?.error); process.exit(1) }
+  const failures = results.filter(r => !r.ok).map(r => r.error)
+  if (!ok.length) { console.error("\nEvery run failed:"); reportFailures(failures); process.exit(1) }
 
   console.log(`${BOLD}SCORES${OFF}\n`)
   ok.forEach((r, i) => {
@@ -261,6 +293,7 @@ async function runGrade(key, args, notes) {
   console.log(`${BOLD}SUMMARY${OFF}`)
   console.log(`  lowest ${s.min}   highest ${s.max}   spread ${s.spread} marks`)
   console.log(`  mean ${s.mean.toFixed(1)}   standard deviation ${s.sd.toFixed(2)}`)
+  reportFailures(failures)
   console.log(`\n${DIM}Same answer. Same marker. ${s.spread === 0 ? "No spread this time — try a more borderline answer." : `${s.spread} marks between best and worst.`}${OFF}\n`)
 }
 
