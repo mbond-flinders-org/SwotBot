@@ -88,6 +88,16 @@ function requireKey() {
 // the one API call, same shape as the app's
 // ---------------------------------------------------------------------------
 const BOLD = "\x1b[1m", DIM = "\x1b[2m", OFF = "\x1b[0m"
+// Groq reports what is left of each budget in the response headers. When a run
+// fails, these say which limit was hit and how long until it refills.
+function rateLimitSummary(res) {
+  const g = (name) => res.headers.get(name) ?? "?"
+  return [
+    `tokens ${g("x-ratelimit-remaining-tokens")}/${g("x-ratelimit-limit-tokens")} left, resets in ${g("x-ratelimit-reset-tokens")}`,
+    `requests ${g("x-ratelimit-remaining-requests")}/${g("x-ratelimit-limit-requests")} left, resets in ${g("x-ratelimit-reset-requests")}`,
+  ].join(" · ")
+}
+
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 async function groqChat(key, systemPrompt, userMessage, temperature, attempt = 0) {
@@ -108,16 +118,31 @@ async function groqChat(key, systemPrompt, userMessage, temperature, attempt = 0
   // Free tiers throttle. Back off and try again rather than losing the run —
   // but say so. A silent wait is indistinguishable from a hung process, and the
   // shell can't return until this finishes.
+  // A budget that has already hit zero will not refill inside our backoff
+  // window, so retrying just burns half a minute. Fail fast and say why.
+  if (res.status === 429 && res.headers.get("x-ratelimit-remaining-tokens") === "0") {
+    const body = (await res.text()).replace(/\s+/g, " ")
+    throw new Error(`HTTP 429 — token budget exhausted. ${rateLimitSummary(res)} | ${body.slice(0, 400)}`)
+  }
+
   if ((res.status === 429 || res.status >= 500) && attempt < 4) {
     const retryAfter = Number(res.headers.get("retry-after"))
     const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2000 * 2 ** attempt
-    const why = res.status === 429 ? "rate limited" : `HTTP ${res.status}`
+    const why = res.status === 429 ? `rate limited (${rateLimitSummary(res)})` : `HTTP ${res.status}`
     console.log(`${DIM}        ${why} — waiting ${Math.round(waitMs / 1000)}s, then retrying (attempt ${attempt + 2} of 5)${OFF}`)
     await sleep(waitMs)
     return groqChat(key, systemPrompt, userMessage, temperature, attempt + 1)
   }
 
-  if (!res.ok) throw new Error(`HTTP ${res.status} — ${(await res.text()).slice(0, 160).replace(/\s+/g, " ")}`)
+  if (!res.ok) {
+    const body = (await res.text()).replace(/\s+/g, " ")
+    // Don't truncate a rate-limit message: which budget ran out, and when it
+    // comes back, is the only thing you actually want to know.
+    const detail = res.status === 429
+      ? `${rateLimitSummary(res)} | ${body.slice(0, 400)}`
+      : body.slice(0, 200)
+    throw new Error(`HTTP ${res.status} — ${detail}`)
+  }
   const data = await res.json()
   const content = data.choices?.[0]?.message?.content
   if (typeof content !== "string") throw new Error("no message content in the reply")
