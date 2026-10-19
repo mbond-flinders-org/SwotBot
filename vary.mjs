@@ -237,7 +237,12 @@ function reportFailures(failures) {
   for (const [msg, n] of [...counts].sort((a, b) => b[1] - a[1])) {
     console.log(`  ${String(n).padStart(2)} x  ${msg}`)
   }
-  console.log(`${DIM}Rate limits are the usual cause — try --concurrency 1, or fewer runs.${OFF}`)
+  // Don't blame rate limits for a parse failure — they are different problems
+  // with different lessons.
+  const anyHttp = failures.some(f => /^HTTP /.test(f))
+  const anyParse = failures.some(f => /JSON|parse/i.test(f))
+  if (anyHttp) console.log(`${DIM}HTTP failures are usually rate limits — try --concurrency 1, or fewer runs.${OFF}`)
+  if (anyParse) console.log(`${DIM}A reply the app cannot read is a result, not a glitch: that run would have shown the user an error.${OFF}`)
 }
 const bar = (n, total, width = 20) => "█".repeat(Math.round((n / total) * width)).padEnd(width, "·")
 
