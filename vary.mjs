@@ -209,18 +209,30 @@ export function scoreStats(scores) {
 // ---------------------------------------------------------------------------
 // running N of them without hammering the free tier
 // ---------------------------------------------------------------------------
-async function pool(count, limit, worker) {
+// `onEach` receives results in run order as they become available, so a run can
+// print itself the moment it lands instead of everything appearing at the end.
+// Watching the scores arrive one at a time is the point of this script.
+async function pool(count, limit, worker, onEach) {
   const results = new Array(count)
-  let next = 0
+  let next = 0, emitted = 0
+
+  const flush = () => {
+    while (emitted < count && results[emitted] !== undefined) {
+      onEach(emitted, results[emitted])
+      emitted++
+    }
+  }
+
   await Promise.all(Array.from({ length: Math.min(limit, count) }, async () => {
     while (next < count) {
       const i = next++
       try { results[i] = { ok: true, value: await worker(i) } }
       catch (err) { results[i] = { ok: false, error: err.message } }
-      process.stdout.write(".")
+      if (onEach) flush()
+      else process.stdout.write(".")
     }
   }))
-  process.stdout.write("\n")
+  if (!onEach) process.stdout.write("\n")
   return results
 }
 
@@ -303,22 +315,28 @@ async function runGenerate(key, args, notes) {
 
 async function runGrade(key, args, notes) {
   header(args, `notes:    ${args.notes}\nquestion: ${args.question}\nanswer:   "${args.answer}"`)
+  console.log(`${BOLD}SCORES${OFF}\n`)
+
   const results = await pool(args.runs, args.concurrency, async () => {
     const userMsg = `Study notes for reference:\n${notes || "(none)"}\n\nQuestion: ${args.question}\n\nStudent's answer: ${args.answer}`
     const raw = await groqChat(key, GRADE_PROMPT, userMsg, args.temperature)
     const r = extractJson(raw, "{")
     return { score: Math.max(0, Math.min(10, Math.round(Number(r.score)))), feedback: String(r.feedback ?? "") }
+  }, (i, r) => {
+    const label = `  run ${String(i + 1).padStart(2)}  `
+    if (r.ok) {
+      console.log(`${label} ${BOLD}${String(r.value.score).padStart(2)}${OFF}/10   ${bar(r.value.score, 10, 10)}`)
+      if (args.show) console.log(`${DIM}            ${r.value.feedback}${OFF}`)
+    } else {
+      // A failed run keeps its place in the sequence. Dropping it silently would
+      // renumber everything after it and hide that the run happened at all.
+      console.log(`${label} ${DIM}--/10   ${r.error.slice(0, 54)}${OFF}`)
+    }
   })
 
   const ok = results.filter(r => r.ok).map(r => r.value)
   const failures = results.filter(r => !r.ok).map(r => r.error)
   if (!ok.length) { console.error("\nEvery run failed:"); reportFailures(failures); process.exit(1) }
-
-  console.log(`${BOLD}SCORES${OFF}\n`)
-  ok.forEach((r, i) => {
-    console.log(`  run ${String(i + 1).padStart(2)}   ${BOLD}${String(r.score).padStart(2)}${OFF}/10   ${bar(r.score, 10, 10)}`)
-    if (args.show) console.log(`${DIM}            ${r.feedback}${OFF}`)
-  })
 
   const s = scoreStats(ok.map(r => r.score))
   console.log(`\n  ${BOLD}${ok.map(r => r.score).join("  ")}${OFF}\n`)
