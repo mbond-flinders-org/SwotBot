@@ -10,6 +10,7 @@
  *   node vary.mjs --temperature 0          # turn the dice off and compare
  *   node vary.mjs --notes my-notes.txt
  *   node vary.mjs --show                   # print every run's questions
+ *   node vary.mjs --concurrency 3          # faster, but free tiers will throttle
  *
  *   node vary.mjs --mode grade             # 10 runs of the grader on one answer
  *   node vary.mjs --mode grade --answer "it lets things happen at once"
@@ -43,7 +44,7 @@ const DEFAULT_ANSWER = "Concurrency is doing lots of things at once. Parallelism
 function parseArgs(argv) {
   const a = {
     runs: 10, mode: "generate", notes: "Study-Notes-Concurrency.txt",
-    temperature: 0.7, concurrency: 3, show: false,
+    temperature: 0.7, concurrency: 1, show: false,
     question: DEFAULT_QUESTION, answer: DEFAULT_ANSWER,
   }
   for (let i = 0; i < argv.length; i++) {
@@ -301,7 +302,7 @@ async function runGenerate(key, args, notes) {
 }
 
 async function runGrade(key, args, notes) {
-  header(args, `question: ${args.question}\nanswer:   "${args.answer}"`)
+  header(args, `notes:    ${args.notes}\nquestion: ${args.question}\nanswer:   "${args.answer}"`)
   const results = await pool(args.runs, args.concurrency, async () => {
     const userMsg = `Study notes for reference:\n${notes || "(none)"}\n\nQuestion: ${args.question}\n\nStudent's answer: ${args.answer}`
     const raw = await groqChat(key, GRADE_PROMPT, userMsg, args.temperature)
