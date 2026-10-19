@@ -73,6 +73,21 @@ Careful: `--filter-providers` matches on part of the name. `"temp 0"` matches
 **both** providers, because "temp 0.7" contains "temp 0". Use the full label, or
 anchor it with `"temp 0$"`.
 
+## A readable table
+
+promptfoo's own table prints the model's full reasoning in every cell. That is
+what you want while debugging and the opposite of what you want on a screen. To
+get a compact one, write the run to a file and summarise it:
+
+```bash
+npx promptfoo@latest eval --env-file ../.env --no-cache -j 1 --delay 13000 \
+    --filter-providers "temp 0.7$" -o last-run.json
+node summarise.mjs last-run.json
+```
+
+You get one line per case, the verdict and the score, and a count of failures per
+prompt. Nothing else.
+
 ## The cases
 
 | # | Case | What it protects |
@@ -115,6 +130,7 @@ it stands, measure it — do not assume.
 - `notes/concurrency.txt` — ordinary study notes
 - `notes/concurrency-injected.txt` — the same notes, with one extra line at the bottom
 - `asserts/*.js` — the grader for each case, in plain JavaScript
+- `summarise.mjs` — turns a promptfoo JSON run into one compact table
 
 If you change the app's grading prompt, change `grader-prompt.json` to match. An
 eval suite that tests a prompt the app no longer uses is worse than no eval suite

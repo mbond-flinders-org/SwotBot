@@ -17,3 +17,5 @@ trace
 app-build-manifest.json
 build-manifest.json
 react-loadable-manifest.json
+
+last-run.json
