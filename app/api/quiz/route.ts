@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 // Model ID comes from .env so it can be changed without touching code —
-// providers retire models, and when that happens this is the only thing to update.
-// See .env.example; current IDs at https://console.groq.com/docs/models
-const MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile"
+// providers retire models, and when that happens this is the only line that matters.
+// Set GROQ_MODEL in .env; current IDs at https://console.groq.com/docs/models
+const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b"
 
 async function groqChat(systemPrompt: string, userMessage: string) {
   const res = await fetch(GROQ_URL, {
