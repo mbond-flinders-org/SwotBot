@@ -83,10 +83,15 @@ Keep the case anyway. It is a permanent guard on a real hole. It is what stops t
 hole coming back quietly, the next time somebody edits the wording.
 
 One caution, and it is the important one. Sixty runs of one attack show that the
-prompt survives *that* attack. They do not show the grader is safe. The stronger
-fix is structural: take the study notes out of the grading call altogether, so
-there is nothing to inject into. Then the answer is zero because the attack cannot
-reach the model, not because the model resisted it.
+prompt survives *that* attack. They do not show the grader is safe.
+
+There is one change that would make this attack impossible: take the study notes
+out of the grading call. Then there is nothing left to inject into. But the notes
+are what the grader marks against. Remove them and SwotBot can no longer mark
+anything specific to your own material — it falls back on general knowledge.
+
+So that is a product decision with a trade-off, not a security fix you get for
+free. It is left undone here on purpose.
 
 Case 4 has not been re-measured since the prompt changed. If you want to know where
 it stands, measure it — do not assume.
