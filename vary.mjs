@@ -87,6 +87,7 @@ function requireKey() {
 // ---------------------------------------------------------------------------
 // the one API call, same shape as the app's
 // ---------------------------------------------------------------------------
+const BOLD = "\x1b[1m", DIM = "\x1b[2m", OFF = "\x1b[0m"
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 async function groqChat(key, systemPrompt, userMessage, temperature, attempt = 0) {
@@ -104,10 +105,14 @@ async function groqChat(key, systemPrompt, userMessage, temperature, attempt = 0
     }),
   })
 
-  // Free tiers throttle. Back off and try again rather than losing the run.
+  // Free tiers throttle. Back off and try again rather than losing the run —
+  // but say so. A silent wait is indistinguishable from a hung process, and the
+  // shell can't return until this finishes.
   if ((res.status === 429 || res.status >= 500) && attempt < 4) {
     const retryAfter = Number(res.headers.get("retry-after"))
     const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2000 * 2 ** attempt
+    const why = res.status === 429 ? "rate limited" : `HTTP ${res.status}`
+    console.log(`${DIM}        ${why} — waiting ${Math.round(waitMs / 1000)}s, then retrying (attempt ${attempt + 2} of 5)${OFF}`)
     await sleep(waitMs)
     return groqChat(key, systemPrompt, userMessage, temperature, attempt + 1)
   }
@@ -239,7 +244,6 @@ async function pool(count, limit, worker, onEach) {
 // ---------------------------------------------------------------------------
 // output
 // ---------------------------------------------------------------------------
-const BOLD = "\x1b[1m", DIM = "\x1b[2m", OFF = "\x1b[0m"
 
 // A run that failed is data too — a half-empty sample quietly skews everything below it.
 function reportFailures(failures) {
