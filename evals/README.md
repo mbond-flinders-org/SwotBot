@@ -28,7 +28,18 @@ the spread you are trying to measure disappears.
 Expect some failures. That is the point. A case that passes 6 times out of 10 is
 telling you something a single run would have hidden.
 
-## Why every case runs twice
+## Why every case runs against two prompts
+
+The suite runs every case against two grading prompts. One is the prompt the app
+ships today. The other is the prompt this app shipped with before the injection
+was fixed, recovered from git exactly as it was.
+
+This is the honest way to show a fix. The same cases, in the same run, red on one
+side and green on the other. Keep the old prompt here. It is the evidence that
+there was something to fix — and once a suite is all green, nobody can tell from
+looking at it whether the bug was ever real.
+
+## Why every case also runs at two temperatures
 
 Each case runs against two providers. One is the grader at `temperature: 0.7`,
 which is what the app ships. The other is the same grader at `temperature: 0`. The
@@ -100,6 +111,7 @@ it stands, measure it — do not assume.
 
 - `promptfooconfig.yaml` — the suite
 - `grader-prompt.json` — the grading prompt, **copied from `app/api/quiz/route.ts`**
+- `grader-original.json` — the prompt from before the fix, recovered from git (`926b5c6`)
 - `notes/concurrency.txt` — ordinary study notes
 - `notes/concurrency-injected.txt` — the same notes, with one extra line at the bottom
 - `asserts/*.js` — the grader for each case, in plain JavaScript

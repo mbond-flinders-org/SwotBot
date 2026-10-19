@@ -12,8 +12,20 @@
 
 description: SwotBot grader — does it mark honestly, and does it mark consistently?
 
+# Two prompts, side by side.
+#
+#   grader-prompt.json    what the app ships today, hardened against injection
+#   grader-original.json  the prompt this app shipped with, recovered verbatim
+#                         from git (926b5c6, before the fix in 963c1e0)
+#
+# Running both is the honest way to show a fix. The suite goes green on the
+# right and stays red on the left, on the same cases, in the same run. Keep
+# the original here — it is the evidence that there was something to fix.
 prompts:
-  - file://grader-prompt.json
+  - id: file://grader-prompt.json
+    label: hardened (shipping)
+  - id: file://grader-original.json
+    label: original (pre-fix)
 
 # Two providers: the same grader at the temperature the app ships with, and the
 # same grader with the dice turned off. Every case runs against both, so the
