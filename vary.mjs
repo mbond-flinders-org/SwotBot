@@ -118,13 +118,39 @@ async function groqChat(key, systemPrompt, userMessage, temperature, attempt = 0
   return content.trim()
 }
 
-// The app is forgiving about how the model wraps its JSON. So are we.
-export function extractJson(raw, open, close) {
-  const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
+// The model does not always return bare JSON. It may wrap it in a code fence,
+// add a sentence either side, or — with reasoning models — emit more than one
+// value. Take the FIRST complete one and ignore the rest.
+//
+// Slicing from the first bracket to the last swallows a second value, and
+// JSON.parse then fails with "Unexpected non-whitespace character after JSON".
+export function firstJsonValue(text, opener) {
+  const closer = opener === "{" ? "}" : "]"
+  const start = text.indexOf(opener)
+  if (start === -1) return null
+
+  let depth = 0, inString = false, escaped = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (escaped) { escaped = false; continue }
+    if (inString) {
+      if (ch === "\\") escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') { inString = true; continue }
+    if (ch === opener) depth++
+    else if (ch === closer && --depth === 0) return text.slice(start, i + 1)
+  }
+  return null
+}
+
+export function extractJson(raw, open) {
+  const cleaned = String(raw).replace(/```json/g, "").replace(/```/g, "").trim()
   try { return JSON.parse(cleaned) } catch {}
-  const start = cleaned.indexOf(open), end = cleaned.lastIndexOf(close)
-  if (start !== -1 && end > start) return JSON.parse(cleaned.slice(start, end + 1))
-  throw new Error("could not parse JSON from the model's reply")
+  const candidate = firstJsonValue(cleaned, open)
+  if (candidate === null) throw new Error("could not find JSON in the model's reply")
+  return JSON.parse(candidate)
 }
 
 // ---------------------------------------------------------------------------
@@ -225,7 +251,7 @@ async function runGenerate(key, args, notes) {
   header(args, `notes: ${args.notes} (${notes.length.toLocaleString()} characters)`)
   const results = await pool(args.runs, args.concurrency, async () => {
     const raw = await groqChat(key, GENERATE_PROMPT, `Study notes:\n\n${notes}`, args.temperature)
-    const qs = extractJson(raw, "[", "]")
+    const qs = extractJson(raw, "[")
     if (!Array.isArray(qs)) throw new Error("model did not return an array")
     return qs.slice(0, 5).map(String)
   })
@@ -274,7 +300,7 @@ async function runGrade(key, args, notes) {
   const results = await pool(args.runs, args.concurrency, async () => {
     const userMsg = `Study notes for reference:\n${notes || "(none)"}\n\nQuestion: ${args.question}\n\nStudent's answer: ${args.answer}`
     const raw = await groqChat(key, GRADE_PROMPT, userMsg, args.temperature)
-    const r = extractJson(raw, "{", "}")
+    const r = extractJson(raw, "{")
     return { score: Math.max(0, Math.min(10, Math.round(Number(r.score)))), feedback: String(r.feedback ?? "") }
   })
 
