@@ -3,6 +3,11 @@
 Paste your study notes. SwotBot writes quiz questions from them, marks your
 answers, and gives you feedback.
 
+**Try it: [swot-bot-rnsu.vercel.app](https://swot-bot-rnsu.vercel.app)** — no sign-up,
+paste anything. The footer tells you which build you are using.
+
+![SwotBot — paste your study notes, get a quiz, get marked](docs/screenshot.png)
+
 ## Which version is this?
 
 This repo follows a video series, and each video has a release. Pick the one that
