@@ -6,7 +6,7 @@ answers, and gives you feedback.
 **Try it: [swot-bot-rnsu.vercel.app](https://swot-bot-rnsu.vercel.app)** — no sign-up,
 paste anything. The footer tells you which build you are using.
 
-![SwotBot — paste your study notes, get a quiz, get marked](docs/screenshot.png)
+![SwotBot marking an answer: six out of ten, with one line of feedback](docs/screenshot.png)
 
 ## Which version is this?
 
